@@ -1,31 +1,70 @@
-﻿[
-    {
-        "Label": "Base Label",
-        "ResetDefault": "default"
+﻿{
+    "comment": {
+        "Label": "",
+        "ResetDefault": "Trait Correlations"
     },
-    {
-        "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
-        "Label": "Boolean Label",
-        "ResetDefault": "true"
+    "dataFrame": {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataEnumeration, RInsightUIConsoleVb",
+        "Options": [],
+        "OptionType": "Dataframe",
+        "Label": "Data Frame",
+        "ResetDefault": ""
     },
-    {
+    "decimalPlaces": {
         "$type": "RInsightUIConsoleVb.UIElementMetadataNumber, RInsightUIConsoleVb",
         "Min": 0.0,
-        "Max": 100.0,
+        "Max": 10.0,
         "Increment": 1.0,
         "IsInteger": true,
-        "Label": "Integer Label",
-        "ResetDefault": "10"
+        "Label": "Decimal Places",
+        "ResetDefault": "2"
     },
-    {
+    "isComment": {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
+        "Label": "Comment",
+        "ResetDefault": "true"
+    },
+    "isDisplayOptions": {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
+        "Label": "Display Options",
+        "ResetDefault": "false"
+    },
+    "isIncludePValues": {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
+        "Label": "Include P-values",
+        "ResetDefault": "false"
+    },
+    "isLeadingZeros": {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
+        "Label": "Leading Zeros",
+        "ResetDefault": "false"
+    },
+    "isSaveAsTable": {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
+        "Label": "Save as Table",
+        "ResetDefault": "true"
+    },
+    "isStoreTableOrDataFrame": {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
+        "Label": "Store Table",
+        "ResetDefault": "true"
+    },
+    "overallTrait": {
         "$type": "RInsightUIConsoleVb.UIElementMetadataEnumeration, RInsightUIConsoleVb",
-        "Options": [
-            "OptionA",
-            "OptionB",
-            "OptionC"
-        ],
-        "OptionType": 1,
-        "Label": "Enum Label",
-        "ResetDefault": "OptionA"
+        "Options": [],
+        "OptionType": "Column",
+        "Label": "Overall Trait",
+        "ResetDefault": ""
+    },
+    "storeTableOrDataFrame": {
+        "Label": ""
+        "ResetDefault": "summary_table"
+    },
+    "traitsToCompareTo": {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataEnumeration, RInsightUIConsoleVb",
+        "Options": [],
+        "OptionType": "Column",
+        "Label": "Traits To Compare To",
+        "ResetDefault": ""
     }
-]
+} 
