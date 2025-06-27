@@ -1,0 +1,31 @@
+﻿[
+    {
+        "Label": "Base Label",
+        "ResetDefault": "default"
+    },
+    {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
+        "Label": "Boolean Label",
+        "ResetDefault": "true"
+    },
+    {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataNumber, RInsightUIConsoleVb",
+        "Min": 0.0,
+        "Max": 100.0,
+        "Increment": 1.0,
+        "IsInteger": true,
+        "Label": "Integer Label",
+        "ResetDefault": "10"
+    },
+    {
+        "$type": "RInsightUIConsoleVb.UIElementMetadataEnumeration, RInsightUIConsoleVb",
+        "Options": [
+            "OptionA",
+            "OptionB",
+            "OptionC"
+        ],
+        "OptionType": 1,
+        "Label": "Enum Label",
+        "ResetDefault": "OptionA"
+    }
+]

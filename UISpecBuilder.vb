@@ -27,7 +27,7 @@ Public Class UISpecBuilder
         For Each model In lstTransformToScript
             Dim element = BuildUIElementTree(model)
             If element IsNot Nothing Then
-                rootElement.lstChildren.Add(element)
+                rootElement.Children.Add(element)
             End If
         Next
 
@@ -82,6 +82,10 @@ Public Class UISpecBuilder
             File.WriteAllText(strFilePath, strElementTree)
         End If
 
+        Dim strDialogTypesPath As String = Path.Combine(dlgDefinitionsPath, "Dlg" & strDialogName, "dlg" & strDialogName & "Types.json")
+        'deserialize the types
+        Dim lstDialogTypes As List(Of UIElement) = JsonConvert.DeserializeObject(Of List(Of UIElement))(File.ReadAllText(strDialogTypesPath))
+
     End Sub
 
     Private Shared Function GetUIElementNoDuplicateSiblings(element As UIElement, Optional bIgnoreTrueFalse As Boolean = False) As UIElement
@@ -90,10 +94,10 @@ Public Class UISpecBuilder
         ' Process children and remove duplicates among siblings
         Dim seenSignatures As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
         Dim childrenParse1 As New List(Of UIElement)
-        For Each child In element.lstChildren
+        For Each child In element.Children
             Dim cleanedChild = GetUIElementNoDuplicateSiblings(child, bIgnoreTrueFalse)
-            If cleanedChild IsNot Nothing AndAlso Not IsSignatureInSet(cleanedChild.strSignature, seenSignatures, bIgnoreTrueFalse) Then
-                seenSignatures.Add(cleanedChild.strSignature)
+            If cleanedChild IsNot Nothing AndAlso Not IsSignatureInSet(cleanedChild.Signature, seenSignatures, bIgnoreTrueFalse) Then
+                seenSignatures.Add(cleanedChild.Signature)
                 childrenParse1.Add(cleanedChild)
             End If
         Next
@@ -104,15 +108,15 @@ Public Class UISpecBuilder
         For iChildIndex As Integer = childrenParse1.Count - 1 To 0 Step -1
             Dim child = childrenParse1(iChildIndex)
             Dim cleanedChild = GetUIElementNoDuplicateSiblings(child, bIgnoreTrueFalse)
-            If cleanedChild IsNot Nothing AndAlso Not IsSignatureInSet(cleanedChild.strSignature, seenSignatures, bIgnoreTrueFalse) Then
-                seenSignatures.Add(cleanedChild.strSignature)
+            If cleanedChild IsNot Nothing AndAlso Not IsSignatureInSet(cleanedChild.Signature, seenSignatures, bIgnoreTrueFalse) Then
+                seenSignatures.Add(cleanedChild.Signature)
                 childrenParse2.Add(cleanedChild)
             End If
         Next
 
         ' Create a new node to avoid mutating the original
-        Dim newElement As New UIElement(element.strElementName)
-        newElement.lstChildren = childrenParse2
+        Dim newElement As New UIElement(element.ElementName)
+        newElement.Children = childrenParse2
         Return newElement
     End Function
 
@@ -127,7 +131,7 @@ Public Class UISpecBuilder
         End If
 
         ' If this strSignature matches any ancestor, remove this node
-        If IsSignatureInSet(element.strSignature, ancestorsSignatures, bIgnoreTrueFalse) Then
+        If IsSignatureInSet(element.Signature, ancestorsSignatures, bIgnoreTrueFalse) Then
             Return Nothing
         End If
 
@@ -141,13 +145,13 @@ Public Class UISpecBuilder
 
         ' Make a list of parent siblings for this nodes children
         Dim siblingSignatures As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-        For Each child In element.lstChildren
-            siblingSignatures.Add(child.strSignature)
+        For Each child In element.Children
+            siblingSignatures.Add(child.Signature)
         Next
 
         Dim newChildren As New List(Of UIElement)
-        For i As Integer = 0 To element.lstChildren.Count - 1
-            Dim child = element.lstChildren(i)
+        For i As Integer = 0 To element.Children.Count - 1
+            Dim child = element.Children(i)
             Dim cleanedChild = GetUIElementNoDuplicateAncestors(child, ancestorsSignaturesNew, siblingSignatures, bIgnoreTrueFalse)
             If cleanedChild IsNot Nothing Then
                 newChildren.Add(cleanedChild)
@@ -155,8 +159,8 @@ Public Class UISpecBuilder
         Next
 
         ' Create a new node to avoid mutating the original
-        Dim newElement As New UIElement(element.strElementName)
-        newElement.lstChildren = newChildren
+        Dim newElement As New UIElement(element.ElementName)
+        newElement.Children = newChildren
         Return newElement
     End Function
 
@@ -199,8 +203,8 @@ Public Class UISpecBuilder
 
         ' Step 6: Add a clone of the duplicate node to the LCA's children (if not already present)
         Dim nodeToAdd = CloneSubtree(cloneMap(nodeToDuplicate))
-        If Not lcaClone.lstChildren.Any(Function(child) child.strSignature = nodeToAdd.strSignature) Then
-            lcaClone.lstChildren.Add(nodeToAdd)
+        If Not lcaClone.Children.Any(Function(child) child.Signature = nodeToAdd.Signature) Then
+            lcaClone.Children.Add(nodeToAdd)
         End If
 
         Return newRoot
@@ -250,13 +254,13 @@ Public Class UISpecBuilder
     Private Shared Sub RecordSignaturePaths(node As UIElement, path As List(Of UIElement), signatureToPaths As Dictionary(Of String, List(Of List(Of UIElement))))
         If node Is Nothing Then Return
         Dim newPath = New List(Of UIElement)(path) From {node}
-        If Not String.IsNullOrEmpty(node.strSignature) Then
-            If Not signatureToPaths.ContainsKey(node.strSignature) Then
-                signatureToPaths(node.strSignature) = New List(Of List(Of UIElement))()
+        If Not String.IsNullOrEmpty(node.Signature) Then
+            If Not signatureToPaths.ContainsKey(node.Signature) Then
+                signatureToPaths(node.Signature) = New List(Of List(Of UIElement))()
             End If
-            signatureToPaths(node.strSignature).Add(newPath)
+            signatureToPaths(node.Signature).Add(newPath)
         End If
-        For Each child In node.lstChildren
+        For Each child In node.Children
             RecordSignaturePaths(child, newPath, signatureToPaths)
         Next
     End Sub
@@ -271,8 +275,8 @@ Public Class UISpecBuilder
             If upToLca IsNot Nothing AndAlso path(i - 1) Is upToLca Then
                 Exit For
             End If
-            Dim nextName = path(i).strElementName
-            current = current.lstChildren.FirstOrDefault(Function(child) child.strElementName = nextName)
+            Dim nextName = path(i).ElementName
+            current = current.Children.FirstOrDefault(Function(child) child.ElementName = nextName)
             If current Is Nothing Then Exit For
         Next
         Return current
@@ -283,11 +287,11 @@ Public Class UISpecBuilder
     ''' </summary>
     Private Shared Function CloneSubtree(node As UIElement) As UIElement
         If node Is Nothing Then Return Nothing
-        Dim newNode As New UIElement(node.strElementName)
-        For Each child In node.lstChildren
+        Dim newNode As New UIElement(node.ElementName)
+        For Each child In node.Children
             Dim newChild = CloneSubtree(child)
             If newChild IsNot Nothing Then
-                newNode.lstChildren.Add(newChild)
+                newNode.Children.Add(newChild)
             End If
         Next
         Return newNode
@@ -311,7 +315,7 @@ Public Class UISpecBuilder
             For Each child In model.lstTransformations
                 Dim childElement = BuildUIElementTree(child)
                 If childElement IsNot Nothing Then
-                    element.lstChildren.Add(childElement)
+                    element.Children.Add(childElement)
                 End If
             Next
         End If
@@ -338,12 +342,12 @@ Public Class UISpecBuilder
     ' Helper: Clone the tree and build a map from old node to new node
     Private Shared Function CloneTree(node As UIElement, cloneMap As Dictionary(Of UIElement, UIElement)) As UIElement
         If node Is Nothing Then Return Nothing
-        Dim newNode As New UIElement(node.strElementName)
+        Dim newNode As New UIElement(node.ElementName)
         cloneMap(node) = newNode
-        For Each child In node.lstChildren
+        For Each child In node.Children
             Dim newChild = CloneTree(child, cloneMap)
             If newChild IsNot Nothing Then
-                newNode.lstChildren.Add(newChild)
+                newNode.Children.Add(newChild)
             End If
         Next
         Return newNode
@@ -356,10 +360,10 @@ Public Class UISpecBuilder
         If element Is Nothing Then Return String.Empty
 
         Dim sb As New System.Text.StringBuilder()
-        If Not String.IsNullOrEmpty(element.strElementName) Then
-            sb.AppendLine($"{New String(" "c, level * 2)}Level {level}: {element.strElementName}")
+        If Not String.IsNullOrEmpty(element.ElementName) Then
+            sb.AppendLine($"{New String(" "c, level * 2)}Level {level}: {element.ElementName}")
         End If
-        For Each child In element.lstChildren
+        For Each child In element.Children
             sb.Append(OutputUIElementTree(child, level + 1))
         Next
         Return sb.ToString()
