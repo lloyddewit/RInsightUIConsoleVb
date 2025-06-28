@@ -1,7 +1,6 @@
 ﻿Public Class UIElement
     Public ReadOnly Property ElementName As String = ""
     Public Property Children As New List(Of UIElement)
-    Public Property UIElementMetadata As UIElementMetadata = Nothing
 
     Public Sub New(strName As String)
         ElementName = strName
@@ -35,7 +34,6 @@
         For Each child In Children
             clonedElement.Children.Add(child.Clone())
         Next
-        clonedElement.UIElementMetadata = If(UIElementMetadata?.Clone(), Nothing)
         Return clonedElement
     End Function
 
