@@ -22,32 +22,32 @@
     "isComment": {
         "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
         "Label": "Comment",
-        "ResetDefault": "true"
+        "ResetDefault": "True"
     },
     "isDisplayOptions": {
         "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
         "Label": "Display Options",
-        "ResetDefault": "false"
+        "ResetDefault": "False"
     },
     "isIncludePValues": {
         "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
         "Label": "Include P-values",
-        "ResetDefault": "false"
+        "ResetDefault": "False"
     },
     "isLeadingZeros": {
         "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
         "Label": "Leading Zeros",
-        "ResetDefault": "false"
+        "ResetDefault": "False"
     },
     "isSaveAsTable": {
         "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
         "Label": "Save as Table",
-        "ResetDefault": "true"
+        "ResetDefault": "True"
     },
     "isStoreTableOrDataFrame": {
         "$type": "RInsightUIConsoleVb.UIElementMetadataBoolean, RInsightUIConsoleVb",
         "Label": "Store Table",
-        "ResetDefault": "true"
+        "ResetDefault": "True"
     },
     "overallTrait": {
         "$type": "RInsightUIConsoleVb.UIElementMetadataEnumeration, RInsightUIConsoleVb",

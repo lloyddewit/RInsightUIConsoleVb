@@ -75,6 +75,16 @@ Public Class UISpecBuilder
         settings.Converters.Add(New StringEnumConverter())
 
         Dim metadata As Dictionary(Of String, UIElementMetadata) = JsonConvert.DeserializeObject(Of Dictionary(Of String, UIElementMetadata))(File.ReadAllText(metadataPath), settings)
+
+        For Each kvp In metadata
+            Dim key = kvp.Key
+            Dim meta = kvp.Value
+            If Not meta.IsResetDefaultValid() Then
+                Console.WriteLine($"Warning: ResetDefault value '{meta.ResetDefault}' is invalid for '{key}' ({meta.GetType().Name})")
+                ' Optionally, handle the error (throw, log, etc.)
+            End If
+        Next
+
         debugInfo += vbLf & vbLf & "After adding metadata:" & vbLf & vbLf
         debugInfo += OutputUIElementTree(rootElementNoDuplicateAncestorsTrueFalse, 0, metadata)
 
