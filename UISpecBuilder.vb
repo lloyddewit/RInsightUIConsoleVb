@@ -100,80 +100,100 @@ Public Class UISpecBuilder
 
     End Sub
 
-    Private Shared Function GetUIElementNoDuplicateSiblings(element As UIElement, Optional bIgnoreTrueFalse As Boolean = False) As UIElement
-        If element Is Nothing Then Return Nothing
+    ''' <summary>
+    ''' Recursively builds a UIElement tree from a clsTransformationRModel tree.
+    ''' </summary>
+    Private Shared Function BuildUIElementTree(model As clsTransformationRModel) As UIElement
+        If model Is Nothing Then Return Nothing
 
-        ' Process children and remove duplicates among siblings
-        Dim seenSignatures As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-        Dim childrenParse1 As New List(Of UIElement)
-        For Each child In element.Children
-            Dim cleanedChild = GetUIElementNoDuplicateSiblings(child, bIgnoreTrueFalse)
-            If cleanedChild IsNot Nothing AndAlso Not IsSignatureInSet(cleanedChild.Signature, seenSignatures, bIgnoreTrueFalse) Then
-                seenSignatures.Add(cleanedChild.Signature)
-                childrenParse1.Add(cleanedChild)
-            End If
-        Next
-
-        'loop backwards through new children to see if we can remove any more siblings
-        seenSignatures = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-        Dim childrenParse2 As New List(Of UIElement)
-        For iChildIndex As Integer = childrenParse1.Count - 1 To 0 Step -1
-            Dim child = childrenParse1(iChildIndex)
-            Dim cleanedChild = GetUIElementNoDuplicateSiblings(child, bIgnoreTrueFalse)
-            If cleanedChild IsNot Nothing AndAlso Not IsSignatureInSet(cleanedChild.Signature, seenSignatures, bIgnoreTrueFalse) Then
-                seenSignatures.Add(cleanedChild.Signature)
-                childrenParse2.Add(cleanedChild)
-            End If
-        Next
-
-        ' Create a new node to avoid mutating the original
-        Dim newElement As New UIElement(element.ElementName)
-        newElement.Children = childrenParse2
-        Return newElement
-    End Function
-
-    Private Shared Function GetUIElementNoDuplicateAncestors(element As UIElement,
-                                                      ancestorsSignatures As HashSet(Of String),
-                                                      parentSiblings As HashSet(Of String),
-                                                      Optional bIgnoreTrueFalse As Boolean = False) As UIElement
-        If element Is Nothing Then Return Nothing
-
-        If ancestorsSignatures Is Nothing Then
-            ancestorsSignatures = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-        End If
-
-        ' If this strSignature matches any ancestor, remove this node
-        If IsSignatureInSet(element.Signature, ancestorsSignatures, bIgnoreTrueFalse) Then
+        ' Only create a UIElement if strValueKey is not null or empty
+        If String.IsNullOrEmpty(model.strValueKey) AndAlso (model.lstTransformations Is Nothing OrElse model.lstTransformations.Count = 0) Then
             Return Nothing
         End If
 
-        ' Make a list of ancestors for this nodes children, include the siblings of this parent
-        Dim ancestorsSignaturesNew As New HashSet(Of String)(ancestorsSignatures, StringComparer.OrdinalIgnoreCase)
-        If parentSiblings IsNot Nothing Then
-            For Each siblingSignature In parentSiblings
-                ancestorsSignaturesNew.Add(siblingSignature)
+        Dim strElementName As String = model.strValueKey
+        strElementName += If(model.enumTransformationType = clsTransformationRModel.TransformationType.ifFalseExecuteChildTransformations, " F", "")
+        Dim element As New UIElement(strElementName)
+        If model.lstTransformations IsNot Nothing Then
+            For Each child In model.lstTransformations
+                Dim childElement = BuildUIElementTree(child)
+                If childElement IsNot Nothing Then
+                    element.Children.Add(childElement)
+                End If
             Next
         End If
+        Return element
+    End Function
 
-        ' Make a list of parent siblings for this nodes children
-        Dim siblingSignatures As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-        For Each child In element.Children
-            siblingSignatures.Add(child.Signature)
-        Next
-
-        Dim newChildren As New List(Of UIElement)
-        For i As Integer = 0 To element.Children.Count - 1
-            Dim child = element.Children(i)
-            Dim cleanedChild = GetUIElementNoDuplicateAncestors(child, ancestorsSignaturesNew, siblingSignatures, bIgnoreTrueFalse)
-            If cleanedChild IsNot Nothing Then
-                newChildren.Add(cleanedChild)
+    ''' <summary>
+    ''' Clones a subtree (deep copy) of a UIElement node.
+    ''' </summary>
+    Private Shared Function CloneSubtree(node As UIElement) As UIElement
+        If node Is Nothing Then Return Nothing
+        Dim newNode As New UIElement(node.ElementName)
+        For Each child In node.Children
+            Dim newChild = CloneSubtree(child)
+            If newChild IsNot Nothing Then
+                newNode.Children.Add(newChild)
             End If
         Next
+        Return newNode
+    End Function
 
-        ' Create a new node to avoid mutating the original
-        Dim newElement As New UIElement(element.ElementName)
-        newElement.Children = newChildren
-        Return newElement
+    ' Helper: Clone the tree and build a map from old node to new node
+    Private Shared Function CloneTree(node As UIElement, cloneMap As Dictionary(Of UIElement, UIElement)) As UIElement
+        If node Is Nothing Then Return Nothing
+        Dim newNode As New UIElement(node.ElementName)
+        cloneMap(node) = newNode
+        For Each child In node.Children
+            Dim newChild = CloneTree(child, cloneMap)
+            If newChild IsNot Nothing Then
+                newNode.Children.Add(newChild)
+            End If
+        Next
+        Return newNode
+    End Function
+
+    ' Helper: Find the lowest common ancestor from a list of paths
+    Private Shared Function FindLCAFromPaths(paths As List(Of List(Of UIElement))) As UIElement
+        If paths Is Nothing OrElse paths.Count = 0 Then Return Nothing
+        Dim minLen = paths.Min(Function(p) p.Count)
+        Dim lca As UIElement = Nothing
+        For i = 0 To minLen - 1
+            Dim thisNode = paths(0)(i)
+            Dim iIndex = i 'needed to prevent warning in line below
+            If paths.All(Function(p) p(iIndex) Is thisNode) Then
+                lca = thisNode
+            Else
+                Exit For
+            End If
+        Next
+        Return lca
+    End Function
+
+    ''' <summary>
+    ''' Finds the LCA node in the clone tree, given a path and the original LCA node.
+    ''' </summary>
+    Private Shared Function FindNodeByPath(root As UIElement, path As List(Of UIElement), cloneMap As Dictionary(Of UIElement, UIElement), Optional upToLca As UIElement = Nothing) As UIElement
+        If path Is Nothing OrElse path.Count = 0 Then Return Nothing
+        Dim current As UIElement = root
+        For i As Integer = 1 To path.Count - 1 ' skip root (already at root)
+            If upToLca IsNot Nothing AndAlso path(i - 1) Is upToLca Then
+                Exit For
+            End If
+            Dim nextName = path(i).ElementName
+            current = current.Children.FirstOrDefault(Function(child) child.ElementName = nextName)
+            If current Is Nothing Then Exit For
+        Next
+        Return current
+    End Function
+
+    Private Shared Function GetSignatureIgnoreTrueFalse(strSignature As String) As String
+        If strSignature.EndsWith(" F", StringComparison.Ordinal) Then
+            strSignature = strSignature.Substring(0, strSignature.Length - 2)
+        End If
+        strSignature = strSignature.Replace(" F,", ",")
+        Return strSignature
     End Function
 
     ''' <summary>
@@ -222,6 +242,82 @@ Public Class UISpecBuilder
         Return newRoot
     End Function
 
+    Private Shared Function GetUIElementNoDuplicateAncestors(element As UIElement,
+                                                      ancestorsSignatures As HashSet(Of String),
+                                                      parentSiblings As HashSet(Of String),
+                                                      Optional bIgnoreTrueFalse As Boolean = False) As UIElement
+        If element Is Nothing Then Return Nothing
+
+        If ancestorsSignatures Is Nothing Then
+            ancestorsSignatures = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        End If
+
+        ' If this strSignature matches any ancestor, remove this node
+        If IsSignatureInSet(element.Signature, ancestorsSignatures, bIgnoreTrueFalse) Then
+            Return Nothing
+        End If
+
+        ' Make a list of ancestors for this nodes children, include the siblings of this parent
+        Dim ancestorsSignaturesNew As New HashSet(Of String)(ancestorsSignatures, StringComparer.OrdinalIgnoreCase)
+        If parentSiblings IsNot Nothing Then
+            For Each siblingSignature In parentSiblings
+                ancestorsSignaturesNew.Add(siblingSignature)
+            Next
+        End If
+
+        ' Make a list of parent siblings for this nodes children
+        Dim siblingSignatures As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        For Each child In element.Children
+            siblingSignatures.Add(child.Signature)
+        Next
+
+        Dim newChildren As New List(Of UIElement)
+        For i As Integer = 0 To element.Children.Count - 1
+            Dim child = element.Children(i)
+            Dim cleanedChild = GetUIElementNoDuplicateAncestors(child, ancestorsSignaturesNew, siblingSignatures, bIgnoreTrueFalse)
+            If cleanedChild IsNot Nothing Then
+                newChildren.Add(cleanedChild)
+            End If
+        Next
+
+        ' Create a new node to avoid mutating the original
+        Dim newElement As New UIElement(element.ElementName)
+        newElement.Children = newChildren
+        Return newElement
+    End Function
+
+    Private Shared Function GetUIElementNoDuplicateSiblings(element As UIElement, Optional bIgnoreTrueFalse As Boolean = False) As UIElement
+        If element Is Nothing Then Return Nothing
+
+        ' Process children and remove duplicates among siblings
+        Dim seenSignatures As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        Dim childrenParse1 As New List(Of UIElement)
+        For Each child In element.Children
+            Dim cleanedChild = GetUIElementNoDuplicateSiblings(child, bIgnoreTrueFalse)
+            If cleanedChild IsNot Nothing AndAlso Not IsSignatureInSet(cleanedChild.Signature, seenSignatures, bIgnoreTrueFalse) Then
+                seenSignatures.Add(cleanedChild.Signature)
+                childrenParse1.Add(cleanedChild)
+            End If
+        Next
+
+        'loop backwards through new children to see if we can remove any more siblings
+        seenSignatures = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+        Dim childrenParse2 As New List(Of UIElement)
+        For iChildIndex As Integer = childrenParse1.Count - 1 To 0 Step -1
+            Dim child = childrenParse1(iChildIndex)
+            Dim cleanedChild = GetUIElementNoDuplicateSiblings(child, bIgnoreTrueFalse)
+            If cleanedChild IsNot Nothing AndAlso Not IsSignatureInSet(cleanedChild.Signature, seenSignatures, bIgnoreTrueFalse) Then
+                seenSignatures.Add(cleanedChild.Signature)
+                childrenParse2.Add(cleanedChild)
+            End If
+        Next
+
+        ' Create a new node to avoid mutating the original
+        Dim newElement As New UIElement(element.ElementName)
+        newElement.Children = childrenParse2
+        Return newElement
+    End Function
+
     ''' <summary>
     ''' Checks if strSignature is in signaturesToCompare, or if any string in signaturesToCompare starts with strSignature plus ", ".
     ''' </summary>
@@ -250,119 +346,6 @@ Public Class UISpecBuilder
         Next
 
         Return False
-    End Function
-
-    Private Shared Function GetSignatureIgnoreTrueFalse(strSignature As String) As String
-        If strSignature.EndsWith(" F", StringComparison.Ordinal) Then
-            strSignature = strSignature.Substring(0, strSignature.Length - 2)
-        End If
-        strSignature = strSignature.Replace(" F,", ",")
-        Return strSignature
-    End Function
-
-    ''' <summary>
-    ''' Recursively records all paths to each node by strSignature.
-    ''' </summary>
-    Private Shared Sub RecordSignaturePaths(node As UIElement, path As List(Of UIElement), signatureToPaths As Dictionary(Of String, List(Of List(Of UIElement))))
-        If node Is Nothing Then Return
-        Dim newPath = New List(Of UIElement)(path) From {node}
-        If Not String.IsNullOrEmpty(node.Signature) Then
-            If Not signatureToPaths.ContainsKey(node.Signature) Then
-                signatureToPaths(node.Signature) = New List(Of List(Of UIElement))()
-            End If
-            signatureToPaths(node.Signature).Add(newPath)
-        End If
-        For Each child In node.Children
-            RecordSignaturePaths(child, newPath, signatureToPaths)
-        Next
-    End Sub
-
-    ''' <summary>
-    ''' Finds the LCA node in the clone tree, given a path and the original LCA node.
-    ''' </summary>
-    Private Shared Function FindNodeByPath(root As UIElement, path As List(Of UIElement), cloneMap As Dictionary(Of UIElement, UIElement), Optional upToLca As UIElement = Nothing) As UIElement
-        If path Is Nothing OrElse path.Count = 0 Then Return Nothing
-        Dim current As UIElement = root
-        For i As Integer = 1 To path.Count - 1 ' skip root (already at root)
-            If upToLca IsNot Nothing AndAlso path(i - 1) Is upToLca Then
-                Exit For
-            End If
-            Dim nextName = path(i).ElementName
-            current = current.Children.FirstOrDefault(Function(child) child.ElementName = nextName)
-            If current Is Nothing Then Exit For
-        Next
-        Return current
-    End Function
-
-    ''' <summary>
-    ''' Clones a subtree (deep copy) of a UIElement node.
-    ''' </summary>
-    Private Shared Function CloneSubtree(node As UIElement) As UIElement
-        If node Is Nothing Then Return Nothing
-        Dim newNode As New UIElement(node.ElementName)
-        For Each child In node.Children
-            Dim newChild = CloneSubtree(child)
-            If newChild IsNot Nothing Then
-                newNode.Children.Add(newChild)
-            End If
-        Next
-        Return newNode
-    End Function
-
-    ''' <summary>
-    ''' Recursively builds a UIElement tree from a clsTransformationRModel tree.
-    ''' </summary>
-    Private Shared Function BuildUIElementTree(model As clsTransformationRModel) As UIElement
-        If model Is Nothing Then Return Nothing
-
-        ' Only create a UIElement if strValueKey is not null or empty
-        If String.IsNullOrEmpty(model.strValueKey) AndAlso (model.lstTransformations Is Nothing OrElse model.lstTransformations.Count = 0) Then
-            Return Nothing
-        End If
-
-        Dim strElementName As String = model.strValueKey
-        strElementName += If(model.enumTransformationType = clsTransformationRModel.TransformationType.ifFalseExecuteChildTransformations, " F", "")
-        Dim element As New UIElement(strElementName)
-        If model.lstTransformations IsNot Nothing Then
-            For Each child In model.lstTransformations
-                Dim childElement = BuildUIElementTree(child)
-                If childElement IsNot Nothing Then
-                    element.Children.Add(childElement)
-                End If
-            Next
-        End If
-        Return element
-    End Function
-
-    ' Helper: Find the lowest common ancestor from a list of paths
-    Private Shared Function FindLCAFromPaths(paths As List(Of List(Of UIElement))) As UIElement
-        If paths Is Nothing OrElse paths.Count = 0 Then Return Nothing
-        Dim minLen = paths.Min(Function(p) p.Count)
-        Dim lca As UIElement = Nothing
-        For i = 0 To minLen - 1
-            Dim thisNode = paths(0)(i)
-            Dim iIndex = i 'needed to prevent warning in line below
-            If paths.All(Function(p) p(iIndex) Is thisNode) Then
-                lca = thisNode
-            Else
-                Exit For
-            End If
-        Next
-        Return lca
-    End Function
-
-    ' Helper: Clone the tree and build a map from old node to new node
-    Private Shared Function CloneTree(node As UIElement, cloneMap As Dictionary(Of UIElement, UIElement)) As UIElement
-        If node Is Nothing Then Return Nothing
-        Dim newNode As New UIElement(node.ElementName)
-        cloneMap(node) = newNode
-        For Each child In node.Children
-            Dim newChild = CloneTree(child, cloneMap)
-            If newChild IsNot Nothing Then
-                newNode.Children.Add(newChild)
-            End If
-        Next
-        Return newNode
     End Function
 
     ''' <summary>
@@ -402,5 +385,22 @@ Public Class UISpecBuilder
         Next
         Return sb.ToString()
     End Function
+
+    ''' <summary>
+    ''' Recursively records all paths to each node by strSignature.
+    ''' </summary>
+    Private Shared Sub RecordSignaturePaths(node As UIElement, path As List(Of UIElement), signatureToPaths As Dictionary(Of String, List(Of List(Of UIElement))))
+        If node Is Nothing Then Return
+        Dim newPath = New List(Of UIElement)(path) From {node}
+        If Not String.IsNullOrEmpty(node.Signature) Then
+            If Not signatureToPaths.ContainsKey(node.Signature) Then
+                signatureToPaths(node.Signature) = New List(Of List(Of UIElement))()
+            End If
+            signatureToPaths(node.Signature).Add(newPath)
+        End If
+        For Each child In node.Children
+            RecordSignaturePaths(child, newPath, signatureToPaths)
+        Next
+    End Sub
 
 End Class

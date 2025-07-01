@@ -33,6 +33,20 @@ Public Class UIElement
     End Property
 
     ''' <summary>
+    ''' Returns a deep copy of this UIElement and all its descendants.
+    ''' </summary>
+    Public Function Clone() As UIElement
+        Dim clonedElement As New UIElement(ElementName)
+
+        If Children Is Nothing Then Return clonedElement
+
+        For Each child In Children
+            clonedElement.Children.Add(child.Clone())
+        Next
+        Return clonedElement
+    End Function
+
+    ''' <summary>
     ''' Recursively collects the ElementName of all descendants into a flat list.
     ''' </summary>
     Private Function GetChildNames(children As List(Of UIElement)) As List(Of String)
@@ -46,20 +60,6 @@ Public Class UIElement
             End If
         Next
         Return names
-    End Function
-
-    ''' <summary>
-    ''' Returns a deep copy of this UIElement and all its descendants.
-    ''' </summary>
-    Public Function Clone() As UIElement
-        Dim clonedElement As New UIElement(ElementName)
-
-        If Children Is Nothing Then Return clonedElement
-
-        For Each child In Children
-            clonedElement.Children.Add(child.Clone())
-        Next
-        Return clonedElement
     End Function
 
 End Class

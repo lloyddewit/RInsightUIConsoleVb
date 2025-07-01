@@ -8,7 +8,7 @@ Public Class UIElementMetadata
     Public Property ResetDefault As String = ""
 
     ''' <summary>
-    ''' Checks if the ResetDefault value is valid for this metadata.
+    ''' Checks if the ResetDefault value is valid.
     ''' This method should be overridden in derived classes to provide specific validation logic.
     ''' </summary>
     ''' <returns>True if the data members are not nothing</returns>
@@ -24,7 +24,7 @@ Public Class UIElementMetadataBoolean
     Inherits UIElementMetadata
 
     ''' <summary>
-    ''' Checks if the ResetDefault value is valid for a boolean metadata.
+    ''' Checks if the ResetDefault value is valid for a boolean.
     ''' </summary>
     ''' <returns>true if ResetDefault is either "True" or "False"</returns>
     Public Overrides Function IsResetDefaultValid() As Boolean
@@ -45,10 +45,10 @@ Public Class UIElementMetadataNumber
     Public Property IsInteger As Boolean = False
 
     ''' <summary>
-    ''' Checks if the ResetDefault value is valid for a number metadata.
+    ''' Checks if the ResetDefault value is valid for a number.
     ''' </summary>
     ''' <returns>True if ResetDefault is a number within the specified Min and Max range,
-    ''' and if IsInteger is True, it should be an integer.</returns>
+    ''' and if IsInteger is True, ResetDefault should also be an integer.</returns>
     Public Overrides Function IsResetDefaultValid() As Boolean
         Dim value As Double
         If Double.TryParse(ResetDefault, value) Then
@@ -80,13 +80,13 @@ Public Class UIElementMetadataEnumeration
     Public Property OptionType As OptionType
 
     ''' <summary>
-    ''' Checks if the ResetDefault value is valid for an enumeration metadata.
+    ''' Checks if the ResetDefault value is valid for an enumeration.
     ''' </summary>
     ''' <returns>True if ResetDefault is one of the options. Also returns true if the options 
-    '''     list is empty and ResetDefault is null or empty.</returns>
+    '''     list is empty and ResetDefault is empty.</returns>
     Public Overrides Function IsResetDefaultValid() As Boolean
         If Options Is Nothing OrElse Options.Count = 0 Then
-            Return String.IsNullOrEmpty(ResetDefault)
+            Return ResetDefault = ""
         End If
 
         Return Options.Contains(ResetDefault)
