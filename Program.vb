@@ -1,5 +1,5 @@
 Module Program
     Sub Main(args As String())
-        UISpecBuilder.WriteUISpec()
+        UISpecBuilder.WriteUISpec("TraitCorrelations")
     End Sub
 End Module

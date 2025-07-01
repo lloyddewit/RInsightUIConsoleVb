@@ -7,97 +7,70 @@ Public Class UISpecBuilder
     Private Sub New()
     End Sub
 
-    Public Shared Sub WriteUISpec()
-
-        Dim dialogDefinitionsPath As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "DialogDefinitions")
-        Dim dialogName As String = "TraitCorrelations"
-        Dim dialogPath As String = Path.Combine(dialogDefinitionsPath, "Dlg" & dialogName, "dlg" & dialogName & ".json")
-        Dim transformationsJson As String = File.ReadAllText(dialogPath)
-
-        Dim transformations As List(Of clsTransformationRModel) = JsonConvert.DeserializeObject(Of List(Of clsTransformationRModel))(transformationsJson)
+    ''' <summary>
+    ''' Writes a UI specification for a given dialog by reading transformations, building a 
+    ''' UIElement tree, and then recursively and iteratively removing duplicates until no more 
+    ''' duplicates can be removed. The result is a minimal tree of UI elements that can be used to 
+    ''' build a UI dialog. Also writes debug information to a file.
+    ''' </summary>
+    ''' <param name="dialogName"></param>
+    Public Shared Sub WriteUISpec(dialogName As String)
 
         ' Build the initial UIElement tree
-        Dim rootElement As New UIElement("Root")
+        Dim root As New UIElement("Root")
+        Dim transformations As List(Of clsTransformationRModel) = ReadTransformations(dialogName)
         For Each model In transformations
             Dim element = BuildUIElementTree(model)
             If element IsNot Nothing Then
-                rootElement.Children.Add(element)
+                root.Children.Add(element)
             End If
         Next
-
-        Dim debugInfo As String = vbLf & vbLf & "Before duplicate removal:" & vbLf & vbLf
-        debugInfo += OutputUIElementTree(rootElement, 0)
 
         ' Remove duplicate siblings
-        Dim rootElementNoDuplicateSiblings = GetUIElementNoDuplicateSiblings(rootElement)
-        debugInfo += vbLf & vbLf & "After duplicate sibling removal:" & vbLf & vbLf
-        debugInfo += OutputUIElementTree(rootElementNoDuplicateSiblings, 0)
+        Dim rootNoDuplicateSiblings = GetUIElementNoDuplicateSiblings(root)
 
-        ' Remove nodes that are duplicates of their ancestors, or siblings of their ancestors
-        Dim rootElementNoDuplicateAncestors = GetUIElementNoDuplicateAncestors(rootElementNoDuplicateSiblings, Nothing, Nothing)
-        debugInfo += vbLf & vbLf & "After duplicate ancestor removal:" & vbLf & vbLf
-        debugInfo += OutputUIElementTree(rootElementNoDuplicateAncestors, 0)
+        ' Remove nodes that are duplicates of their ancestors of their ancestors
+        Dim rootNoDuplicateAncestors = GetUIElementNoDuplicateAncestors(
+            rootNoDuplicateSiblings, Nothing, Nothing)
 
-        Dim rootElementDuplicatesInLca As UIElement = Nothing
-        Dim rootElementNoDuplicateAncestorsFinal As UIElement
+        Dim rootDuplicatesInLca As UIElement = Nothing
+        Dim rootNoDuplicateAncestorsFinal As UIElement
         Do
-            ' If there are duplicates in different branches, then find the largest duplicate tree and
-            '   add it to the LCA (Lowest Common Ancestor)
-            rootElementDuplicatesInLca = GetUIElementAddDuplicatesToLca(rootElementNoDuplicateAncestors) ' updated variable name here
-            debugInfo += vbLf & vbLf & "After adding longest duplicate to Lowest Common Ancestor (LCA):" & vbLf & vbLf
-            debugInfo += OutputUIElementTree(rootElementDuplicatesInLca, 0)
+            ' If there are duplicates in different branches, then find the largest duplicate tree
+            '   and add it to the LCA (Lowest Common Ancestor)
+            rootDuplicatesInLca = GetUIElementAddDuplicatesToLca(rootNoDuplicateAncestors)
+            rootNoDuplicateAncestorsFinal = rootNoDuplicateAncestors.Clone()
 
-            rootElementNoDuplicateAncestorsFinal = rootElementNoDuplicateAncestors.Clone()
+            ' Remove nodes that are duplicates of their ancestors
+            rootNoDuplicateAncestors = GetUIElementNoDuplicateAncestors(
+                rootDuplicatesInLca, Nothing, Nothing)
 
-            ' Remove nodes that are duplicates of their ancestors, or siblings of their ancestors
-            rootElementNoDuplicateAncestors = GetUIElementNoDuplicateAncestors(rootElementDuplicatesInLca, Nothing, Nothing)
-            debugInfo += vbLf & vbLf & "After cleaning LCA tree:" & vbLf & vbLf
-            debugInfo += OutputUIElementTree(rootElementNoDuplicateAncestors, 0)
-
-        Loop Until rootElementDuplicatesInLca Is Nothing
+            ' Keep repeating until no more duplicates are found
+        Loop Until rootDuplicatesInLca Is Nothing
 
         ' Remove duplicate true/false siblings
-        Dim rootElementNoDuplicateSiblingsTrueFalse = GetUIElementNoDuplicateSiblings(rootElementNoDuplicateAncestorsFinal, True)
-        debugInfo += vbLf & vbLf & "After duplicate true/false sibling removal:" & vbLf & vbLf
-        debugInfo += OutputUIElementTree(rootElementNoDuplicateSiblingsTrueFalse, 0)
+        Dim rootNoDuplicateSiblingsTrueFalse = GetUIElementNoDuplicateSiblings(
+            rootNoDuplicateAncestorsFinal, True)
 
-        ' Remove true/false nodes that are duplicates of their ancestors, or siblings of their ancestors
-        Dim rootElementNoDuplicateAncestorsTrueFalse = GetUIElementNoDuplicateAncestors(rootElementNoDuplicateSiblingsTrueFalse, Nothing, Nothing, True)
-        debugInfo += vbLf & vbLf & "After true/false duplicate ancestor removal:" & vbLf & vbLf
-        debugInfo += OutputUIElementTree(rootElementNoDuplicateAncestorsTrueFalse, 0)
+        ' Remove true/false nodes that are duplicates of their ancestors
+        Dim rootNoDuplicateAncestorsTrueFalse = GetUIElementNoDuplicateAncestors(
+            rootNoDuplicateSiblingsTrueFalse, Nothing, Nothing, True)
 
-        ' Add metadata
-        Dim metadataPath As String = Path.Combine(dialogDefinitionsPath, "Dlg" & dialogName, "dlg" & dialogName & "Metadata.json")
+        ' Read and verify metadata
+        Dim metadata As Dictionary(Of String, UIElementMetadata) =
+            ReadAndValidateMetadata(dialogName)
 
-        Dim settings As New JsonSerializerSettings With {
-            .TypeNameHandling = TypeNameHandling.Auto,
-            .Formatting = Formatting.Indented}
-        settings.Converters.Add(New StringEnumConverter())
-
-        Dim metadata As Dictionary(Of String, UIElementMetadata) = JsonConvert.DeserializeObject(Of Dictionary(Of String, UIElementMetadata))(File.ReadAllText(metadataPath), settings)
-
-        For Each kvp In metadata
-            Dim key = kvp.Key
-            Dim meta = kvp.Value
-            If Not meta.IsResetDefaultValid() Then
-                Console.WriteLine($"Warning: ResetDefault value '{meta.ResetDefault}' is invalid for '{key}' ({meta.GetType().Name})")
-                ' Optionally, handle the error (throw, log, etc.)
-            End If
-        Next
-
-        debugInfo += vbLf & vbLf & "After adding metadata:" & vbLf & vbLf
-        debugInfo += OutputUIElementTree(rootElementNoDuplicateAncestorsTrueFalse, 0, metadata)
-
-        ' Write the element tree to a file on the desktop
-        Dim desktopPath As String = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
-        Dim debugPath As String = Path.Combine(desktopPath, "tmp", "elementTree.txt")
-        If File.Exists(debugPath) Then
-            File.AppendAllText(debugPath, debugInfo)
-        Else
-            Directory.CreateDirectory(Path.GetDirectoryName(debugPath))
-            File.WriteAllText(debugPath, debugInfo)
-        End If
-
+        ' For debugging, write the element tree to a file on the desktop
+        Dim debugRoots As Dictionary(Of String, UIElement) =
+            New Dictionary(Of String, UIElement) From {
+            {"Before duplicate removal:", root},
+            {"After duplicate sibling removal:", rootNoDuplicateSiblings},
+            {"After duplicate ancestor removal:", rootNoDuplicateAncestors},
+            {"After creating and cleaning LCA tree:", rootNoDuplicateAncestorsFinal},
+            {"After duplicate true/false sibling removal:", rootNoDuplicateSiblingsTrueFalse},
+            {"After true/false duplicate ancestor removal:", rootNoDuplicateAncestorsTrueFalse}
+        }
+        WriteDebugFile(debugRoots, metadata)
     End Sub
 
     ''' <summary>
@@ -186,6 +159,48 @@ Public Class UISpecBuilder
             If current Is Nothing Then Exit For
         Next
         Return current
+    End Function
+
+    ''' <summary>
+    ''' Returns a string representation of the UIElement tree structure, with indentation for each level.
+    ''' </summary>
+    Private Shared Function GetDebugInfo(element As UIElement, level As Integer, title As String, Optional metadataDict As Dictionary(Of String, UIElementMetadata) = Nothing) As String
+        If element Is Nothing Then Return String.Empty
+
+        Dim sb As New Text.StringBuilder()
+        If Not String.IsNullOrEmpty(title) Then
+            sb.AppendLine(vbLf & vbLf & title & vbLf)
+        End If
+
+        Dim elementName As String = element.ElementName
+        If Not String.IsNullOrEmpty(elementName) Then
+
+            If elementName.EndsWith(" F") Then
+                elementName = elementName.Substring(0, elementName.Length - 2)
+            End If
+
+            Dim metadataString As String = ""
+            If metadataDict IsNot Nothing AndAlso metadataDict.ContainsKey(elementName) Then
+
+                Dim metadata As UIElementMetadata = metadataDict(elementName)
+
+                metadataString = $"{metadata.Label}, {metadata.ResetDefault}"
+                If TypeOf metadata Is UIElementMetadataNumber Then
+                    Dim numMetadata As UIElementMetadataNumber = CType(metadata, UIElementMetadataNumber)
+                    metadataString &= $", Min: {numMetadata.Min}, Max: {numMetadata.Max}, Increment: {numMetadata.Increment}, IsInteger: {numMetadata.IsInteger}"
+                ElseIf TypeOf metadata Is UIElementMetadataEnumeration Then
+                    Dim enumMetadata As UIElementMetadataEnumeration = CType(metadata, UIElementMetadataEnumeration)
+                    metadataString &= $", Options: {String.Join(", ", enumMetadata.Options)}, OptionType: {enumMetadata.OptionType}"
+                End If
+            End If
+
+            sb.AppendLine($"{New String(" "c, level * 2)}Level {level}: {element.ElementName}, {metadataString}")
+        End If
+
+        For Each child In element.Children
+            sb.Append(GetDebugInfo(child, level + 1, Nothing, metadataDict))
+        Next
+        Return sb.ToString()
     End Function
 
     Private Shared Function GetSignatureIgnoreTrueFalse(strSignature As String) As String
@@ -348,42 +363,37 @@ Public Class UISpecBuilder
         Return False
     End Function
 
-    ''' <summary>
-    ''' Returns a string representation of the UIElement tree structure, with indentation for each level.
-    ''' </summary>
-    Private Shared Function OutputUIElementTree(element As UIElement, level As Integer, Optional metadataDict As Dictionary(Of String, UIElementMetadata) = Nothing) As String
-        If element Is Nothing Then Return String.Empty
+    Private Shared Function ReadAndValidateMetadata(dialogName As String) As Dictionary(Of String, UIElementMetadata)
+        Dim dialogDefinitionsPath As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "DialogDefinitions")
+        Dim metadataPath As String = Path.Combine(dialogDefinitionsPath, "Dlg" & dialogName, "dlg" & dialogName & "Metadata.json")
 
-        Dim sb As New Text.StringBuilder()
-        Dim elementName As String = element.ElementName
-        If Not String.IsNullOrEmpty(elementName) Then
+        Dim settings As New JsonSerializerSettings With {
+            .TypeNameHandling = TypeNameHandling.Auto,
+            .Formatting = Formatting.Indented}
+        settings.Converters.Add(New StringEnumConverter())
 
-            If elementName.EndsWith(" F") Then
-                elementName = elementName.Substring(0, elementName.Length - 2)
+        Dim metadata As Dictionary(Of String, UIElementMetadata) = JsonConvert.DeserializeObject(Of Dictionary(Of String, UIElementMetadata))(File.ReadAllText(metadataPath), settings)
+
+        For Each kvp In metadata
+            Dim key = kvp.Key
+            Dim meta = kvp.Value
+            If Not meta.IsResetDefaultValid() Then
+                Console.WriteLine($"Warning: ResetDefault value '{meta.ResetDefault}' is invalid for '{key}' ({meta.GetType().Name})")
             End If
-
-            Dim metadataString As String = ""
-            If metadataDict IsNot Nothing AndAlso metadataDict.ContainsKey(elementName) Then
-
-                Dim metadata As UIElementMetadata = metadataDict(elementName)
-
-                metadataString = $"{metadata.Label}, {metadata.ResetDefault}"
-                If TypeOf metadata Is UIElementMetadataNumber Then
-                    Dim numMetadata As UIElementMetadataNumber = CType(metadata, UIElementMetadataNumber)
-                    metadataString &= $", Min: {numMetadata.Min}, Max: {numMetadata.Max}, Increment: {numMetadata.Increment}, IsInteger: {numMetadata.IsInteger}"
-                ElseIf TypeOf metadata Is UIElementMetadataEnumeration Then
-                    Dim enumMetadata As UIElementMetadataEnumeration = CType(metadata, UIElementMetadataEnumeration)
-                    metadataString &= $", Options: {String.Join(", ", enumMetadata.Options)}, OptionType: {enumMetadata.OptionType}"
-                End If
-            End If
-
-            sb.AppendLine($"{New String(" "c, level * 2)}Level {level}: {element.ElementName}, {metadataString}")
-        End If
-
-        For Each child In element.Children
-            sb.Append(OutputUIElementTree(child, level + 1, metadataDict))
         Next
-        Return sb.ToString()
+
+        Return metadata
+    End Function
+
+    Private Shared Function ReadTransformations(dialogName As String) As List(Of clsTransformationRModel)
+
+        Dim dialogDefinitionsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "DialogDefinitions")
+        Dim dialogPath As String = Path.Combine(
+            dialogDefinitionsPath, "Dlg" & dialogName, "dlg" & dialogName & ".json")
+
+        Dim transformationsJson As String = File.ReadAllText(dialogPath)
+        Return JsonConvert.DeserializeObject(Of List(Of clsTransformationRModel))(transformationsJson)
+
     End Function
 
     ''' <summary>
@@ -401,6 +411,30 @@ Public Class UISpecBuilder
         For Each child In node.Children
             RecordSignaturePaths(child, newPath, signatureToPaths)
         Next
+    End Sub
+
+    Private Shared Sub WriteDebugFile(uiElements As Dictionary(Of String, UIElement), metadata As Dictionary(Of String, UIElementMetadata))
+
+        Dim debugInfo As String = ""
+        For Each kvp In uiElements
+            Dim title = kvp.Key
+            Dim element = kvp.Value
+            debugInfo += GetDebugInfo(element, 0, title)
+        Next
+
+        If uiElements.Count > 0 Then
+            Dim lastKey = uiElements.Keys.Last()
+            debugInfo += GetDebugInfo(uiElements(lastKey), 0, "After adding metadata:", metadata)
+        End If
+
+        Dim desktopPath As String = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+        Dim debugPath As String = Path.Combine(desktopPath, "tmp", "elementTree.txt")
+        If File.Exists(debugPath) Then
+            File.AppendAllText(debugPath, debugInfo)
+        Else
+            Directory.CreateDirectory(Path.GetDirectoryName(debugPath))
+            File.WriteAllText(debugPath, debugInfo)
+        End If
     End Sub
 
 End Class
