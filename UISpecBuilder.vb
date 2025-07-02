@@ -18,9 +18,9 @@ Public Class UISpecBuilder
 
         ' Build the initial UIElement tree
         Dim root As New UIElement("Root")
-        Dim transformations As List(Of clsTransformationRModel) = ReadTransformations(dialogName)
+        Dim transformations As List(Of clsTransformationRModel) = GetTransformations(dialogName)
         For Each model In transformations
-            Dim element = BuildUIElementTree(model)
+            Dim element = GetUIElementTree(model)
             If element IsNot Nothing Then
                 root.Children.Add(element)
             End If
@@ -74,80 +74,9 @@ Public Class UISpecBuilder
     End Sub
 
     ''' <summary>
-    ''' Recursively builds a UIElement tree from a clsTransformationRModel tree.
-    ''' </summary>
-    Private Shared Function BuildUIElementTree(model As clsTransformationRModel) As UIElement
-        If model Is Nothing Then Return Nothing
-
-        ' Only create a UIElement if strValueKey is not null or empty
-        If String.IsNullOrEmpty(model.strValueKey) AndAlso (model.lstTransformations Is Nothing OrElse model.lstTransformations.Count = 0) Then
-            Return Nothing
-        End If
-
-        Dim strElementName As String = model.strValueKey
-        strElementName += If(model.enumTransformationType = clsTransformationRModel.TransformationType.ifFalseExecuteChildTransformations, " F", "")
-        Dim element As New UIElement(strElementName)
-        If model.lstTransformations IsNot Nothing Then
-            For Each child In model.lstTransformations
-                Dim childElement = BuildUIElementTree(child)
-                If childElement IsNot Nothing Then
-                    element.Children.Add(childElement)
-                End If
-            Next
-        End If
-        Return element
-    End Function
-
-    ''' <summary>
-    ''' Clones a subtree (deep copy) of a UIElement node.
-    ''' </summary>
-    Private Shared Function CloneSubtree(node As UIElement) As UIElement
-        If node Is Nothing Then Return Nothing
-        Dim newNode As New UIElement(node.ElementName)
-        For Each child In node.Children
-            Dim newChild = CloneSubtree(child)
-            If newChild IsNot Nothing Then
-                newNode.Children.Add(newChild)
-            End If
-        Next
-        Return newNode
-    End Function
-
-    ' Helper: Clone the tree and build a map from old node to new node
-    Private Shared Function CloneTree(node As UIElement, cloneMap As Dictionary(Of UIElement, UIElement)) As UIElement
-        If node Is Nothing Then Return Nothing
-        Dim newNode As New UIElement(node.ElementName)
-        cloneMap(node) = newNode
-        For Each child In node.Children
-            Dim newChild = CloneTree(child, cloneMap)
-            If newChild IsNot Nothing Then
-                newNode.Children.Add(newChild)
-            End If
-        Next
-        Return newNode
-    End Function
-
-    ' Helper: Find the lowest common ancestor from a list of paths
-    Private Shared Function FindLCAFromPaths(paths As List(Of List(Of UIElement))) As UIElement
-        If paths Is Nothing OrElse paths.Count = 0 Then Return Nothing
-        Dim minLen = paths.Min(Function(p) p.Count)
-        Dim lca As UIElement = Nothing
-        For i = 0 To minLen - 1
-            Dim thisNode = paths(0)(i)
-            Dim iIndex = i 'needed to prevent warning in line below
-            If paths.All(Function(p) p(iIndex) Is thisNode) Then
-                lca = thisNode
-            Else
-                Exit For
-            End If
-        Next
-        Return lca
-    End Function
-
-    ''' <summary>
     ''' Finds the LCA node in the clone tree, given a path and the original LCA node.
     ''' </summary>
-    Private Shared Function FindNodeByPath(root As UIElement, path As List(Of UIElement), cloneMap As Dictionary(Of UIElement, UIElement), Optional upToLca As UIElement = Nothing) As UIElement
+    Private Shared Function FindNodeByPath(root As UIElement, path As List(Of UIElement), upToLca As UIElement) As UIElement
         If path Is Nothing OrElse path.Count = 0 Then Return Nothing
         Dim current As UIElement = root
         For i As Integer = 1 To path.Count - 1 ' skip root (already at root)
@@ -203,12 +132,53 @@ Public Class UISpecBuilder
         Return sb.ToString()
     End Function
 
+    ''' <summary>
+    ''' Finds the lowest common ancestor (LCA) node given two paths in the UIElement tree.
+    ''' </summary>
+    ''' <remarks>
+    ''' The paths are lists of UIElement nodes representing the path from the root to the target nodes.
+    ''' The LCA is the deepest node that is an ancestor of both target nodes. 
+    ''' </remarks>
+    ''' <param name="path1">The first path in the UIElement tree.</param>
+    ''' <param name="path2">The second path in the UIElement tree.</param>
+    ''' <returns>The LCA node, or Nothing if no common ancestor is found.</returns>
+    Private Shared Function GetLCA(path1 As List(Of UIElement), path2 As List(Of UIElement)) As UIElement
+        If path1 Is Nothing OrElse path2 Is Nothing OrElse path1.Count = 0 OrElse path2.Count = 0 Then Return Nothing
+        Dim minLen = Math.Min(path1.Count, path2.Count)
+        Dim lca As UIElement = Nothing
+        For i = 0 To minLen - 1
+            If path1(i) Is path2(i) Then
+                lca = path1(i)
+            Else
+                Exit For
+            End If
+        Next
+        Return lca
+    End Function
+
     Private Shared Function GetSignatureIgnoreTrueFalse(strSignature As String) As String
         If strSignature.EndsWith(" F", StringComparison.Ordinal) Then
             strSignature = strSignature.Substring(0, strSignature.Length - 2)
         End If
         strSignature = strSignature.Replace(" F,", ",")
         Return strSignature
+    End Function
+
+    ''' <summary>
+    ''' Reads the transformations for <paramref name="dialogName"/> from a JSON file and 
+    ''' deserializes them into a list of clsTransformationRModel objects.
+    ''' </summary>
+    ''' <param name="dialogName">The name of the dialog for which transformations are being read.</param>
+    ''' <returns>A list of clsTransformationRModel objects representing the transformations.</returns>
+    Private Shared Function GetTransformations(dialogName As String) As List(Of clsTransformationRModel)
+
+        Dim dialogDefinitionsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "DialogDefinitions")
+        Dim dialogPath As String = Path.Combine(
+            dialogDefinitionsPath, "Dlg" & dialogName, "dlg" & dialogName & ".json")
+
+        Dim transformationsJson As String = File.ReadAllText(dialogPath)
+        Return JsonConvert.DeserializeObject(Of List(Of clsTransformationRModel))(transformationsJson)
+
     End Function
 
     ''' <summary>
@@ -237,19 +207,19 @@ Public Class UISpecBuilder
         Dim path1 = paths(0)
         Dim path2 = paths(1)
         Dim nodeToDuplicate = path2.Last() ' Use the second node as the one to duplicate
-        Dim lca = FindLCAFromPaths(New List(Of List(Of UIElement)) From {path1, path2})
+        Dim lca = GetLCA(path1, path2)
         If lca Is Nothing Then Return Nothing
 
         ' Step 4: Clone the tree so we can add nodes without mutating the original
         Dim cloneMap As New Dictionary(Of UIElement, UIElement)
-        Dim newRoot As UIElement = CloneTree(element, cloneMap)
+        Dim newRoot As UIElement = element.Clone()
 
         ' Step 5: Find the LCA node in the cloned tree
-        Dim lcaClone = FindNodeByPath(newRoot, path1, cloneMap, upToLca:=lca)
+        Dim lcaClone = FindNodeByPath(newRoot, path1, lca)
         If lcaClone Is Nothing Then Return newRoot
 
         ' Step 6: Add a clone of the duplicate node to the LCA's children (if not already present)
-        Dim nodeToAdd = CloneSubtree(cloneMap(nodeToDuplicate))
+        Dim nodeToAdd = nodeToDuplicate.Clone()
         If Not lcaClone.Children.Any(Function(child) child.Signature = nodeToAdd.Signature) Then
             lcaClone.Children.Add(nodeToAdd)
         End If
@@ -301,7 +271,9 @@ Public Class UISpecBuilder
         Return newElement
     End Function
 
-    Private Shared Function GetUIElementNoDuplicateSiblings(element As UIElement, Optional bIgnoreTrueFalse As Boolean = False) As UIElement
+    Private Shared Function GetUIElementNoDuplicateSiblings(
+            element As UIElement, Optional bIgnoreTrueFalse As Boolean = False) As UIElement
+
         If element Is Nothing Then Return Nothing
 
         ' Process children and remove duplicates among siblings
@@ -315,7 +287,7 @@ Public Class UISpecBuilder
             End If
         Next
 
-        'loop backwards through new children to see if we can remove any more siblings
+        ' Loop backwards through new children to see if we can remove any more siblings
         seenSignatures = New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
         Dim childrenParse2 As New List(Of UIElement)
         For iChildIndex As Integer = childrenParse1.Count - 1 To 0 Step -1
@@ -331,6 +303,37 @@ Public Class UISpecBuilder
         Dim newElement As New UIElement(element.ElementName)
         newElement.Children = childrenParse2
         Return newElement
+    End Function
+
+    ''' <summary>
+    ''' Recursively builds a UIElement tree from an R transformation tree.
+    ''' </summary>
+    ''' <param name="transformation"> the tree of R transformations</param>
+    ''' <returns>A tree of UI elements</returns>
+    Private Shared Function GetUIElementTree(transformation As clsTransformationRModel) As UIElement
+        If transformation Is Nothing Then Return Nothing
+
+        If String.IsNullOrEmpty(transformation.strValueKey) AndAlso
+            (transformation.lstTransformations Is Nothing OrElse
+             transformation.lstTransformations.Count = 0) Then
+            Return Nothing
+        End If
+
+        Dim strElementName As String = transformation.strValueKey
+        strElementName += If(transformation.enumTransformationType =
+            clsTransformationRModel.TransformationType.ifFalseExecuteChildTransformations, " F", "")
+
+        Dim element As New UIElement(strElementName)
+        If transformation.lstTransformations Is Nothing Then Return element
+
+        For Each child In transformation.lstTransformations
+            Dim childElement = GetUIElementTree(child)
+            If childElement IsNot Nothing Then
+                element.Children.Add(childElement)
+            End If
+        Next
+
+        Return element
     End Function
 
     ''' <summary>
@@ -383,17 +386,6 @@ Public Class UISpecBuilder
         Next
 
         Return metadata
-    End Function
-
-    Private Shared Function ReadTransformations(dialogName As String) As List(Of clsTransformationRModel)
-
-        Dim dialogDefinitionsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "DialogDefinitions")
-        Dim dialogPath As String = Path.Combine(
-            dialogDefinitionsPath, "Dlg" & dialogName, "dlg" & dialogName & ".json")
-
-        Dim transformationsJson As String = File.ReadAllText(dialogPath)
-        Return JsonConvert.DeserializeObject(Of List(Of clsTransformationRModel))(transformationsJson)
-
     End Function
 
     ''' <summary>
