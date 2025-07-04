@@ -76,21 +76,26 @@ Public Class UISpecBuilder
         Return rootNoDuplicateAncestorsTrueFalse
     End Function
 
-    ''' <summary>
-    ''' Finds the LCA node in the clone tree, given a path and the original LCA node.
-    ''' </summary>
     Private Shared Function FindNodeByPath(root As UIElement, path As List(Of UIElement), upToLca As UIElement) As UIElement
-        If path Is Nothing OrElse path.Count = 0 Then Return Nothing
+        If path Is Nothing OrElse path.Count = 0 _
+            OrElse root Is Nothing _
+            OrElse upToLca Is Nothing Then Throw New ArgumentNullException("Invalid parameter.")
+
         Dim current As UIElement = root
-        For i As Integer = 1 To path.Count - 1 ' skip root (already at root)
-            If upToLca IsNot Nothing AndAlso path(i - 1) Is upToLca Then
-                Exit For
+        For i As Integer = 1 To path.Count - 1
+            If path(i - 1) Is upToLca Then
+                Return current
             End If
-            Dim nextName = path(i).ElementName
-            current = current.Children.FirstOrDefault(Function(child) child.ElementName = nextName)
-            If current Is Nothing Then Exit For
+
+            ' Get the next element in the path
+            ' Note: We determine the next element in the path based on the node's signature.
+            '       There should only be one node with this signature, because any duplicate
+            '       siblings should have been removed in earlier steps.
+            Dim signature = path(i).Signature
+            current = current.Children.Single(Function(child) child.Signature = signature)
         Next
-        Return current
+
+        Throw New InvalidOperationException("Path does not lead to the specified LCA element.")
     End Function
 
     ''' <summary>
@@ -145,7 +150,7 @@ Public Class UISpecBuilder
     ''' <param name="path1">The first path in the UIElement tree.</param>
     ''' <param name="path2">The second path in the UIElement tree.</param>
     ''' <returns>The LCA node, or Nothing if no common ancestor is found.</returns>
-    Private Shared Function GetLCA(path1 As List(Of UIElement),
+    Private Shared Function GetLcaElement(path1 As List(Of UIElement),
                                    path2 As List(Of UIElement)) As UIElement
         If path1 Is Nothing OrElse path2 Is Nothing _
             OrElse path1.Count = 0 OrElse path2.Count = 0 Then Return Nothing
@@ -192,14 +197,14 @@ Public Class UISpecBuilder
     ''' finds the duplicated node with the longest signature, finds any two nodes with this signature, finds their LCA,
     ''' and adds a duplicate of the node as a child of the LCA. If no duplicates exist, returns Nothing.
     ''' </summary>
-    ''' <param name="element"> The root UIElement of the tree to process.</param>
+    ''' <param name="rootElement"> The root UIElement of the tree to process.</param>
     ''' <returns>A new UIElement tree with the duplicate node added, or Nothing if no duplicates were found.</returns>
-    Private Shared Function GetUIElementAddDuplicatesToLca(element As UIElement) As UIElement
-        If element Is Nothing Then Return Nothing
+    Private Shared Function GetUIElementAddDuplicatesToLca(rootElement As UIElement) As UIElement
+        If rootElement Is Nothing Then Return Nothing
 
         ' Create a dictionary of all paths to each signature
         Dim signaturePaths As New Dictionary(Of String, List(Of List(Of UIElement)))
-        UpdateSignaturePaths(element, New List(Of UIElement), signaturePaths)
+        UpdateSignaturePaths(rootElement, New List(Of UIElement), signaturePaths)
 
         ' Convert the dictionary to a list of key-value pairs, filter out signatures with only
         ' one path (i.e. only include duplicate signatures)
@@ -217,32 +222,32 @@ Public Class UISpecBuilder
         '       first (results in a sub-optimal tree).
         Dim longestDup = duplicatedSignatures.OrderByDescending(Function(kvp) kvp.Key.Length).First()
 
-        ' Pick the first two nodes with this signature
-        Dim path1 = longestDup.Value(0)
-        Dim path2 = longestDup.Value(1)
+        ' Get the paths of the the first two nodes with this signature (the path is the list of
+        ' the node's direct ancestors)
+        Dim path1 As List(Of UIElement) = longestDup.Value(0)
+        Dim path2 As List(Of UIElement) = longestDup.Value(1)
 
-        ' Clone node we want to add later to the LCA (node could come from either path because
+        ' Clone the node we want to add later to the LCA (node could come from either path because
         ' both nodes should be identical)
-        Dim nodeToAdd = path1.Last().Clone()
+        Dim elementToAdd = path1.Last().Clone()
 
-        ' Find the LCA of the two paths
-        Dim lca = GetLCA(path1, path2)
-        If lca Is Nothing Then Return Nothing
+        ' Get the element that is the LCA element of the two paths
+        Dim lcaElement As UIElement = GetLcaElement(path1, path2)
+        If lcaElement Is Nothing Then Return Nothing
 
         ' Clone the tree so we can add nodes without mutating the original
-        Dim mewElement As UIElement = element.Clone()
+        Dim newRootElement As UIElement = rootElement.Clone()
 
-        ' Step 5: Find the LCA node in the cloned tree
-        Dim lcaClone = FindNodeByPath(mewElement, path1, lca)
-        If lcaClone Is Nothing Then Return mewElement
+        ' Find the LCA node in the cloned tree
+        Dim lcaClone = FindNodeByPath(newRootElement, path1, lcaElement)
+        If lcaClone Is Nothing Then Return newRootElement
 
-        ' Step 6: Add a clone of the duplicate node to the LCA's children (if not already present)
-
-        If Not lcaClone.Children.Any(Function(child) child.Signature = nodeToAdd.Signature) Then
-            lcaClone.Children.Add(nodeToAdd)
+        ' Add a clone of the duplicate node to the LCA's children (if not already present)
+        If Not lcaClone.Children.Any(Function(child) child.Signature = elementToAdd.Signature) Then
+            lcaClone.Children.Add(elementToAdd)
         End If
 
-        Return mewElement
+        Return newRootElement
     End Function
 
     ''' <summary>
