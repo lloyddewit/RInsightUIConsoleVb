@@ -14,7 +14,7 @@ Public Class UISpecBuilder
     ''' build a UI dialog. Also writes debug information to a file.
     ''' </summary>
     ''' <param name="dialogName"> Creates the UI specification for this dialog</param>
-    ''' <returns>A minimal tree of UI elements that can be used to build a UI dialog</returns>
+    ''' <returns> A minimal tree of UI elements that can be used to build a UI dialog</returns>
     Public Shared Function GetUISpec(dialogName As String) As UIElement
 
         ' Build the initial UIElement tree
@@ -34,11 +34,12 @@ Public Class UISpecBuilder
         Dim rootNoDuplicateAncestors = GetUIElementNoDuplicateAncestors(
             rootNoDuplicateSiblings, Nothing, Nothing)
 
+        ' Iteratively move duplicates to the LCA (Lowest Common Ancestor)
         Dim rootDuplicatesInLca As UIElement = Nothing
         Dim rootNoDuplicateAncestorsFinal As UIElement
         Do
             ' If there are duplicates in different branches, then find the duplicate tree with
-            '    the longest signature, and add it to the LCA (Lowest Common Ancestor)
+            '    the longest signature, and add it to the LCA
             rootDuplicatesInLca = GetUIElementAddDuplicatesToLca(rootNoDuplicateAncestors)
             rootNoDuplicateAncestorsFinal = rootNoDuplicateAncestors.Clone()
 
@@ -59,7 +60,7 @@ Public Class UISpecBuilder
 
         ' Read and verify metadata
         Dim metadata As Dictionary(Of String, UIElementMetadata) =
-            ReadAndValidateMetadata(dialogName)
+            GetMetadata(dialogName)
 
         ' For debugging, write the element tree to a file on the desktop
         Dim debugRoots As Dictionary(Of String, UIElement) =
@@ -76,32 +77,17 @@ Public Class UISpecBuilder
         Return rootNoDuplicateAncestorsTrueFalse
     End Function
 
-    Private Shared Function FindNodeByPath(root As UIElement, path As List(Of UIElement), upToLca As UIElement) As UIElement
-        If path Is Nothing OrElse path.Count = 0 _
-            OrElse root Is Nothing _
-            OrElse upToLca Is Nothing Then Throw New ArgumentNullException("Invalid parameter.")
-
-        Dim current As UIElement = root
-        For i As Integer = 1 To path.Count - 1
-            If path(i - 1) Is upToLca Then
-                Return current
-            End If
-
-            ' Get the next element in the path
-            ' Note: We determine the next element in the path based on the node's signature.
-            '       There should only be one node with this signature, because any duplicate
-            '       siblings should have been removed in earlier steps.
-            Dim signature = path(i).Signature
-            current = current.Children.Single(Function(child) child.Signature = signature)
-        Next
-
-        Throw New InvalidOperationException("Path does not lead to the specified LCA element.")
-    End Function
-
     ''' <summary>
-    ''' Returns a string representation of the UIElement tree structure, with indentation for each level.
+    ''' Returns a a string representation of the UIElement tree structure, with indentation for 
+    ''' each level.
     ''' </summary>
-    Private Shared Function GetDebugInfo(element As UIElement, level As Integer, title As String, Optional metadataDict As Dictionary(Of String, UIElementMetadata) = Nothing) As String
+    ''' <param name="element">The UIElement to start from.</param>
+    ''' <param name="level">The current level in the tree (used for indentation).</param>
+    ''' <param name="title">Title for the output.</param>
+    ''' <param name="metadataDict">Optional metadata dictionary for additional information.</param>
+    ''' <returns>A string representation of the UIElement tree.</returns>
+    Private Shared Function GetDebugInfo(element As UIElement, level As Integer, title As String,
+            Optional metadataDict As Dictionary(Of String, UIElementMetadata) = Nothing) As String
         If element Is Nothing Then Return String.Empty
 
         Dim sb As New Text.StringBuilder()
@@ -123,21 +109,75 @@ Public Class UISpecBuilder
 
                 metadataString = $"{metadata.Label}, {metadata.ResetDefault}"
                 If TypeOf metadata Is UIElementMetadataNumber Then
-                    Dim numMetadata As UIElementMetadataNumber = CType(metadata, UIElementMetadataNumber)
-                    metadataString &= $", Min: {numMetadata.Min}, Max: {numMetadata.Max}, Increment: {numMetadata.Increment}, IsInteger: {numMetadata.IsInteger}"
+                    Dim numMetadata As UIElementMetadataNumber =
+                        CType(metadata, UIElementMetadataNumber)
+                    metadataString &= $", Min: {numMetadata.Min}, Max: {numMetadata.Max}, " &
+                        $"Increment: {numMetadata.Increment}, IsInteger: {numMetadata.IsInteger}"
                 ElseIf TypeOf metadata Is UIElementMetadataEnumeration Then
-                    Dim enumMetadata As UIElementMetadataEnumeration = CType(metadata, UIElementMetadataEnumeration)
-                    metadataString &= $", Options: {String.Join(", ", enumMetadata.Options)}, OptionType: {enumMetadata.OptionType}"
+                    Dim enumMetadata As UIElementMetadataEnumeration =
+                        CType(metadata, UIElementMetadataEnumeration)
+                    metadataString &= $", Options: {String.Join(", ", enumMetadata.Options)}, " &
+                        $"OptionType: {enumMetadata.OptionType}"
                 End If
             End If
 
-            sb.AppendLine($"{New String(" "c, level * 2)}Level {level}: {element.ElementName}, {metadataString}")
+            sb.AppendLine($"{New String(" "c, level * 2)}Level {level}: {element.ElementName}, " &
+                $"{metadataString}")
         End If
 
         For Each child In element.Children
             sb.Append(GetDebugInfo(child, level + 1, Nothing, metadataDict))
         Next
+
         Return sb.ToString()
+    End Function
+
+    ''' <summary>
+    ''' Finds the LCA (Lowest Common Ancestor) element from the <paramref name="root"/> element of 
+    ''' a cloned UIElement tree. It finds the LCA element using <paramref name="path"/> and 
+    ''' <paramref name="lcaElement"/>.
+    ''' </summary>
+    ''' <remarks>
+    ''' Both <paramref name="path"/> and <paramref name="lcaElement"/> should come from the 
+    ''' original tree (i.e. before the tree was cloned). The method traverses the cloned tree 
+    ''' according to the path and returns the equivalent LCA element in the cloned tree. This 
+    ''' method assumes that the path is a valid path in the cloned tree and that the LCA element
+    ''' exists in the cloned tree. If the path does not lead to the specified LCA element in the 
+    ''' cloned tree, an exception is thrown.
+    ''' </remarks>
+    ''' <param name="root">The root of the cloned UIElement tree.</param>
+    ''' <param name="path">The path to the LCA element in the original tree.</param>
+    ''' <param name="lcaElement">The original LCA element.</param>
+    ''' <returns>The LCA element in the cloned tree.</returns>
+    ''' <exception cref="ArgumentNullException">Thrown if any of the parameters are null or 
+    '''     invalid.</exception>
+    ''' <exception cref="InvalidOperationException">Thrown if the path does not lead to the 
+    '''     specified LCA element.</exception>
+    Private Shared Function GetLcaElementFromClonedTree(root As UIElement, path As List(Of UIElement),
+                                                        lcaElement As UIElement) As UIElement
+        If path Is Nothing OrElse path.Count = 0 _
+            OrElse root Is Nothing _
+            OrElse lcaElement Is Nothing Then Throw New ArgumentNullException("Invalid parameter.")
+
+        ' Follow the path through the cloned tree until we find the LCA element
+        Dim current As UIElement = root
+        For i As Integer = 1 To path.Count - 1
+            ' Note: if the path elements and the LCA element both come from the same tree, then we
+            '       could also do `If path(i - 1) Is lcaElement Then` but I found comparing the
+            '       signatures was safer
+            If path(i - 1).Signature = lcaElement.Signature Then
+                Return current
+            End If
+
+            ' Get the next element in the path
+            ' Note: We determine the next element in the path based on the node's signature.
+            '       There should only be one node with this signature, because any duplicate
+            '       siblings should have been removed in earlier steps.
+            Dim signature = path(i).Signature
+            current = current.Children.Single(Function(child) child.Signature = signature)
+        Next
+
+        Throw New InvalidOperationException("Path does not lead to the specified LCA element.")
     End Function
 
     ''' <summary>
@@ -150,7 +190,7 @@ Public Class UISpecBuilder
     ''' <param name="path1">The first path in the UIElement tree.</param>
     ''' <param name="path2">The second path in the UIElement tree.</param>
     ''' <returns>The LCA node, or Nothing if no common ancestor is found.</returns>
-    Private Shared Function GetLcaElement(path1 As List(Of UIElement),
+    Private Shared Function GetLcaElementFromTwoPaths(path1 As List(Of UIElement),
                                    path2 As List(Of UIElement)) As UIElement
         If path1 Is Nothing OrElse path2 Is Nothing _
             OrElse path1.Count = 0 OrElse path2.Count = 0 Then Return Nothing
@@ -167,6 +207,53 @@ Public Class UISpecBuilder
         Return lca
     End Function
 
+    ''' <summary>
+    ''' Reads the metadata for a dialog from a JSON file and deserializes it into a dictionary of 
+    ''' UIElementMetadata objects.
+    ''' </summary>
+    ''' <remarks>
+    ''' The metadata file is expected to be in a specific directory structure based on the dialog name.
+    ''' </remarks>"
+    ''' <param name="dialogName">The name of the dialog for which metadata is being read.</param>
+    ''' <returns>A dictionary where keys are element names and values are their metadata.</returns>
+    ''' <exception cref="FileNotFoundException">Thrown if the metadata file does not exist.</exception>
+    ''' <exception cref="JsonException">Thrown if the JSON is invalid or cannot be deserialized.</exception>
+    ''' <exception cref="ArgumentException">Thrown if the ResetDefault value is invalid for any 
+    '''     UIElementMetadata.</exception>
+    Private Shared Function GetMetadata(
+                               dialogName As String) As Dictionary(Of String, UIElementMetadata)
+        Dim dialogDefinitionsPath As String = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, "assets", "DialogDefinitions")
+        Dim metadataPath As String = Path.Combine(
+            dialogDefinitionsPath, "Dlg" & dialogName, "dlg" & dialogName & "Metadata.json")
+
+        Dim settings As New JsonSerializerSettings With {
+            .TypeNameHandling = TypeNameHandling.Auto,
+            .Formatting = Formatting.Indented}
+        settings.Converters.Add(New StringEnumConverter())
+
+        Dim metadata As Dictionary(Of String, UIElementMetadata) = JsonConvert.DeserializeObject(
+            Of Dictionary(Of String, UIElementMetadata))(File.ReadAllText(metadataPath), settings)
+
+        For Each kvp In metadata
+            Dim value As UIElementMetadata = kvp.Value
+            If Not value.IsResetDefaultValid() Then
+                Throw New ArgumentException(
+                    $"ResetDefault value '{value.ResetDefault}' is invalid for '{kvp.Key}' " &
+                    $"({value.GetType().Name})")
+            End If
+        Next
+
+        Return metadata
+    End Function
+
+    ''' <summary>
+    ''' Some signatures contain " F" to indicate a false condition. This function removes any " F" 
+    ''' suffixes from the signature. This function can be used to ignore variations of true/false 
+    ''' when comparing signatures.
+    ''' </summary>
+    ''' <param name="strSignature">The signature to process.</param>
+    ''' <returns>The processed signature without any " F".</returns>
     Private Shared Function GetSignatureIgnoreTrueFalse(strSignature As String) As String
         If strSignature.EndsWith(" F", StringComparison.Ordinal) Then
             strSignature = strSignature.Substring(0, strSignature.Length - 2)
@@ -183,28 +270,30 @@ Public Class UISpecBuilder
     ''' <returns>A list of clsTransformationRModel objects representing the transformations.</returns>
     Private Shared Function GetTransformations(dialogName As String) As List(Of clsTransformationRModel)
 
-        Dim dialogDefinitionsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "DialogDefinitions")
+        Dim dialogDefinitionsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets",
+                                                 "DialogDefinitions")
         Dim dialogPath As String = Path.Combine(
             dialogDefinitionsPath, "Dlg" & dialogName, "dlg" & dialogName & ".json")
 
         Dim transformationsJson As String = File.ReadAllText(dialogPath)
         Return JsonConvert.DeserializeObject(Of List(Of clsTransformationRModel))(transformationsJson)
-
     End Function
 
     ''' <summary>
-    ''' Returns a new UIElement tree with one extra node added: if there are duplicate signatures in the tree,
-    ''' finds the duplicated node with the longest signature, finds any two nodes with this signature, finds their LCA,
-    ''' and adds a duplicate of the node as a child of the LCA. If no duplicates exist, returns Nothing.
+    ''' Returns a new UIElement tree with one extra node added: if there are duplicate signatures 
+    ''' in the tree, finds the duplicated node with the longest signature, finds any two nodes with 
+    ''' this signature, finds their LCA, and adds a duplicate of the node as a child of the LCA. 
+    ''' If no duplicates exist, returns Nothing.
     ''' </summary>
-    ''' <param name="rootElement"> The root UIElement of the tree to process.</param>
-    ''' <returns>A new UIElement tree with the duplicate node added, or Nothing if no duplicates were found.</returns>
-    Private Shared Function GetUIElementAddDuplicatesToLca(rootElement As UIElement) As UIElement
-        If rootElement Is Nothing Then Return Nothing
+    ''' <param name="root"> The root UIElement of the tree to process.</param>
+    ''' <returns> A new UIElement tree with the duplicate node added, or Nothing if no duplicates 
+    '''           were found.</returns>
+    Private Shared Function GetUIElementAddDuplicatesToLca(root As UIElement) As UIElement
+        If root Is Nothing Then Return Nothing
 
         ' Create a dictionary of all paths to each signature
         Dim signaturePaths As New Dictionary(Of String, List(Of List(Of UIElement)))
-        UpdateSignaturePaths(rootElement, New List(Of UIElement), signaturePaths)
+        UpdateSignaturePaths(root, New List(Of UIElement), signaturePaths)
 
         ' Convert the dictionary to a list of key-value pairs, filter out signatures with only
         ' one path (i.e. only include duplicate signatures)
@@ -220,7 +309,8 @@ Public Class UISpecBuilder
         '       always the case, but in practice it works well because our main concern is to
         '       prevent smaller duplicate subtrees within other duplicate subtrees being processed
         '       first (results in a sub-optimal tree).
-        Dim longestDup = duplicatedSignatures.OrderByDescending(Function(kvp) kvp.Key.Length).First()
+        Dim longestDup = duplicatedSignatures.OrderByDescending(
+            Function(kvp) kvp.Key.Length).First()
 
         ' Get the paths of the the first two nodes with this signature (the path is the list of
         ' the node's direct ancestors)
@@ -232,14 +322,14 @@ Public Class UISpecBuilder
         Dim elementToAdd = path1.Last().Clone()
 
         ' Get the element that is the LCA element of the two paths
-        Dim lcaElement As UIElement = GetLcaElement(path1, path2)
+        Dim lcaElement As UIElement = GetLcaElementFromTwoPaths(path1, path2)
         If lcaElement Is Nothing Then Return Nothing
 
         ' Clone the tree so we can add nodes without mutating the original
-        Dim newRootElement As UIElement = rootElement.Clone()
+        Dim newRootElement As UIElement = root.Clone()
 
         ' Find the LCA node in the cloned tree
-        Dim lcaClone = FindNodeByPath(newRootElement, path1, lcaElement)
+        Dim lcaClone = GetLcaElementFromClonedTree(newRootElement, path1, lcaElement)
         If lcaClone Is Nothing Then Return newRootElement
 
         ' Add a clone of the duplicate node to the LCA's children (if not already present)
@@ -385,55 +475,44 @@ Public Class UISpecBuilder
     End Function
 
     ''' <summary>
-    ''' Checks if strSignature is in signaturesToCompare, or if any string in signaturesToCompare starts with strSignature plus ", ".
+    ''' Returns True if <paramref name="signature"/> is in <paramref name="signaturesToCompare"/>,
+    ''' or if <paramref name="signature"/> is a prefix of a signature in 
+    ''' <paramref name="signaturesToCompare"/>.
     ''' </summary>
-    Private Shared Function IsSignatureInSet(strSignature As String,
+    ''' <param name="ignoreTrueFalse"> If true, ignore variations of true/false signatures</param>
+    ''' <param name="signature"> The signature to look for</param>
+    ''' <param name="signaturesToCompare">The set of signatures to compare against</param>
+    ''' <returns>True if <paramref name="signature"/> is in
+    '''     <paramref name="signaturesToCompare"/></returns>
+    Private Shared Function IsSignatureInSet(signature As String,
                                       signaturesToCompare As HashSet(Of String),
-                                      bIgnoreTrueFalse As Boolean) As Boolean
+                                      ignoreTrueFalse As Boolean) As Boolean
 
-        Dim strSignatureCleaned As String = If(bIgnoreTrueFalse, GetSignatureIgnoreTrueFalse(strSignature), strSignature)
-
+        ' Create a cleaned set of signatures to compare against (" F" removed if required)
+        Dim signatureCleaned As String = If(ignoreTrueFalse,
+                                            GetSignatureIgnoreTrueFalse(signature), signature)
         Dim signaturesToCompareCleaned = New HashSet(Of String)
         For Each sig In signaturesToCompare
-            Dim sigCleaned As String = If(bIgnoreTrueFalse, GetSignatureIgnoreTrueFalse(sig), sig)
+            Dim sigCleaned As String = If(ignoreTrueFalse, GetSignatureIgnoreTrueFalse(sig), sig)
             signaturesToCompareCleaned.Add(sigCleaned)
         Next
 
-        If signaturesToCompareCleaned.Contains(strSignatureCleaned) Then
+        ' If the signature is identical to a signature in the set of signatures, return true
+        If signaturesToCompareCleaned.Contains(signatureCleaned) Then
             Return True
         End If
 
-        Dim strSignatureExtended As String = strSignatureCleaned & ", "
-        Dim iSignatureLen As Integer = strSignatureExtended.Length
+        ' If the signature is a prefix of a signature in the set of signatures, return true
+        Dim signatureExtended As String = signatureCleaned & ", "
+        Dim signatureLen As Integer = signatureExtended.Length
         For Each sig In signaturesToCompareCleaned
-            If sig.Length >= iSignatureLen AndAlso String.Compare(sig.Substring(0, iSignatureLen), strSignatureExtended, StringComparison.Ordinal) = 0 Then
+            If sig.Length >= signatureLen AndAlso String.Compare(sig.Substring(0, signatureLen),
+                                            signatureExtended, StringComparison.Ordinal) = 0 Then
                 Return True
             End If
         Next
 
         Return False
-    End Function
-
-    Private Shared Function ReadAndValidateMetadata(dialogName As String) As Dictionary(Of String, UIElementMetadata)
-        Dim dialogDefinitionsPath As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "DialogDefinitions")
-        Dim metadataPath As String = Path.Combine(dialogDefinitionsPath, "Dlg" & dialogName, "dlg" & dialogName & "Metadata.json")
-
-        Dim settings As New JsonSerializerSettings With {
-            .TypeNameHandling = TypeNameHandling.Auto,
-            .Formatting = Formatting.Indented}
-        settings.Converters.Add(New StringEnumConverter())
-
-        Dim metadata As Dictionary(Of String, UIElementMetadata) = JsonConvert.DeserializeObject(Of Dictionary(Of String, UIElementMetadata))(File.ReadAllText(metadataPath), settings)
-
-        For Each kvp In metadata
-            Dim key = kvp.Key
-            Dim meta = kvp.Value
-            If Not meta.IsResetDefaultValid() Then
-                Console.WriteLine($"Warning: ResetDefault value '{meta.ResetDefault}' is invalid for '{key}' ({meta.GetType().Name})")
-            End If
-        Next
-
-        Return metadata
     End Function
 
     ''' <summary>
@@ -477,18 +556,28 @@ Public Class UISpecBuilder
         Next
     End Sub
 
-    Private Shared Sub WriteDebugFile(uiElements As Dictionary(Of String, UIElement), metadata As Dictionary(Of String, UIElementMetadata))
+    ''' <summary>
+    ''' Writes debug information about the trees in <paramref name="uiElementRoots"/> to a file on 
+    ''' the desktop. The debug information includes the structure of each UIElement tree, with 
+    ''' indentation for each level, and metadata for each element if available.
+    ''' </summary>
+    ''' <param name="uiElementRoots"> Dictionary of trees to write debug information for. The key 
+    ''' is the title and the value is the root of the tree.</param>
+    ''' <param name="metadata"> The metadata associated with the UI elements</param>
+    Private Shared Sub WriteDebugFile(uiElementRoots As Dictionary(Of String, UIElement),
+                                      metadata As Dictionary(Of String, UIElementMetadata))
 
         Dim debugInfo As String = ""
-        For Each kvp In uiElements
+        For Each kvp In uiElementRoots
             Dim title = kvp.Key
             Dim element = kvp.Value
             debugInfo += GetDebugInfo(element, 0, title)
         Next
 
-        If uiElements.Count > 0 Then
-            Dim lastKey = uiElements.Keys.Last()
-            debugInfo += GetDebugInfo(uiElements(lastKey), 0, "After adding metadata:", metadata)
+        If uiElementRoots.Count > 0 Then
+            Dim lastKey = uiElementRoots.Keys.Last()
+            debugInfo += GetDebugInfo(uiElementRoots(lastKey), 0, "After adding metadata:",
+                                      metadata)
         End If
 
         Dim desktopPath As String = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
