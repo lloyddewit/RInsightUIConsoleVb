@@ -2,6 +2,12 @@
 Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Converters
 
+''' <summary>
+''' This class provides methods to build a UI specification for a dialog by reading 
+''' transformations, building a UIElement tree, and recursively and iteratively removing duplicates 
+''' until no more duplicates can be removed. The result is a minimal tree of UI elements that can 
+''' be used to build a UI dialog.
+''' </summary>
 Public Class UISpecBuilder
     ' Prevent instantiation because this class is designed to only contain shared methods
     Private Sub New()
