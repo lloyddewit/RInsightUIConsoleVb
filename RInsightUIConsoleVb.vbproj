@@ -15,16 +15,10 @@
     <None Update="assets\DialogDefinitions\DlgTraitCorrelations\dlgTraitCorrelations.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="assets\DialogDefinitions\DlgTraitCorrelations\dlgTraitCorrelations.R">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Update="assets\DialogDefinitions\DlgTraitCorrelations\dlgTraitCorrelationsMetadata.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="assets\DialogDefinitions\DlgTraits\dlgTraits.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="assets\DialogDefinitions\DlgTraits\dlgTraits.R">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

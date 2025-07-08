@@ -1,5 +1,6 @@
 Module Program
     Sub Main(args As String())
-        UISpecBuilder.GetUISpec("TraitCorrelations")
+        Dim traitCorrelations As UIElement = UISpecBuilder.GetUISpec("TraitCorrelations")
+        UISpecBuilder.WriteJsonFile(traitCorrelations, "TraitCorrelations")
     End Sub
 End Module

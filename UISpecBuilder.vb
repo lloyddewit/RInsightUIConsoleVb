@@ -84,7 +84,35 @@ Public Class UISpecBuilder
     End Function
 
     ''' <summary>
-    ''' Returns a a string representation of the UIElement tree structure, with indentation for 
+    ''' Serializes the given UIElement tree to JSON and writes it to a file in the tmp folder on 
+    ''' the desktop.
+    ''' </summary>
+    ''' <param name="root">The root of the UIElement tree to serialize.</param>
+    ''' <param name="dialogName">The name of the dialog, used to create the filename.</param>
+    ''' <exception cref="ArgumentNullException">Thrown if the root is null.</exception>
+    Public Shared Sub WriteJsonFile(root As UIElement, dialogName As String)
+        If root Is Nothing Then Throw New ArgumentNullException(NameOf(root))
+
+        Dim settings As New JsonSerializerSettings With {
+            .TypeNameHandling = TypeNameHandling.Auto,
+            .Formatting = Formatting.Indented}
+        settings.Converters.Add(New StringEnumConverter())
+
+        Dim json As String = JsonConvert.SerializeObject(root, settings)
+
+        Dim desktopPath As String = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+        Dim tmpFolder As String = Path.Combine(desktopPath, "tmp")
+        Dim jsonPath As String = Path.Combine(tmpFolder, "dlg" & dialogName & "UIElements.json")
+
+        If Not Directory.Exists(tmpFolder) Then
+            Directory.CreateDirectory(tmpFolder)
+        End If
+
+        File.WriteAllText(jsonPath, json)
+    End Sub
+
+    ''' <summary>
+    ''' Returns a string representation of the UIElement tree structure, with indentation for 
     ''' each level.
     ''' </summary>
     ''' <param name="element">The UIElement to start from.</param>
