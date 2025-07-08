@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="RInsightUIConsoleVb.UISpecBuilder">
+    <Position X="3.75" Y="1" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAgAAEAAAASAAAAgAkAGAEAAAAAEAAAAQIAAAAAAAAA=</HashCode>
+      <FileName>UISpecBuilder.vb</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="RInsightUIConsoleVb.UIElement">
+    <Position X="5.75" Y="1" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAABAAAAAAAAAAAAAEAAAAAAAAAAAAAAIAAAAAABE=</HashCode>
+      <FileName>UIElement.vb</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="RInsightUIConsoleVb.UIElementMetadata">
+    <Position X="9.75" Y="1" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAEAEAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAA=</HashCode>
+      <FileName>UIElementMetadata.vb</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="RInsightUIConsoleVb.UIElementMetadataBoolean">
+    <Position X="7.5" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAA=</HashCode>
+      <FileName>UIElementMetadata.vb</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="RInsightUIConsoleVb.UIElementMetadataNumber">
+    <Position X="12" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAABAAAAAAMAAAAAAAAAAAAAAAAABAAQAAAAA=</HashCode>
+      <FileName>UIElementMetadata.vb</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="RInsightUIConsoleVb.UIElementMetadataEnumeration">
+    <Position X="9.75" Y="3.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAABAAABAAAA=</HashCode>
+      <FileName>UIElementMetadata.vb</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Enum Name="RInsightUIConsoleVb.OptionType">
+    <Position X="9.75" Y="5.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>BAAQAAAAAAAAAAAAAABAAAAAAAAAAAgAAAAAAAAAAAA=</HashCode>
+      <FileName>UIElementMetadata.vb</FileName>
+    </TypeIdentifier>
+  </Enum>
+  <Font Name="Segoe UI" Size="9" />
+</ClassDiagram>
